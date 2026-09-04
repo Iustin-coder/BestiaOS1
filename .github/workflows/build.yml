@@ -1,7 +1,7 @@
 name: Compilare BestiaOS pentru Redmi K20 Pro Premium
 
 on:
-  workflow_dispatch: # Pornire manuală cu un singur click din interfață
+  workflow_dispatch: # Pornire manuala cu un singur click din interfata
 
 jobs:
   build:
@@ -19,7 +19,8 @@ jobs:
         sudo apt-get update
         sudo apt-get install -y bc bison build-essential ccache curl flex g++-multilib gcc-multilib git gnupg gperf lib32ncurses5-dev lib32readline-dev lib32z1-dev liblz4-tool libncurses5 libncurses5-dev libsdl1.2-dev libssl-dev libxml2 libxml2-utils lzop pngcrush rsync schedtool squashfs-tools xsltproc zip zlib1g-dev
         mkdir -p ~/bin
-        curl https://googleapis.com > ~/bin/repo
+        # URL nou si securizat de la Google pentru a evita eroarea HTML
+        curl -s https://googlesource.com | base64 --decode > ~/bin/repo
         chmod a+x ~/bin/repo
         export PATH=~/bin:$PATH
 
