@@ -1,18 +1,58 @@
-name: Build BestiaOS Modular
+name: Build BestiaOS Modular cu Verificare Safety
 
 on:
   workflow_dispatch:
 
 jobs:
-  build_bestia:
+  pre_check_and_build:
     runs-on: ubuntu-22.04
 
     steps:
     - name: Checkout Cod
       uses: actions/checkout@v4
 
-    # TRUCUL 1: Curățare extremă pentru a elibera ~70-80 GB direct pe VM
-    # Acest script elimină pachetele uriașe preinstalate de GitHub
+    # ==========================================
+    # PASUL DE SIGURANȚĂ ȘI VERIFICARE RAPIDĂ
+    # ==========================================
+    
+    - name: Verificare Sintaxă și Validare Linkuri de Descărcare
+      run: |
+        echo "=== FAZA 1: Verificare erori de sintaxă în scripturi ==="
+        # Verifică dacă există erori de sintaxă în toate scripturile .sh din repository
+        # Dacă găsește o eroare de scriere, bash -n va opri imediat rularea
+        for script in $(find . -name "*.sh"); do
+          echo "Se verifică sintaxa pentru: $script"
+          bash -n "$script"
+        done
+        echo "Sintaxa este corectă! Trecem la linkuri..."
+
+        echo "=== FAZA 2: Testare disponibilitate linkuri esențiale ==="
+        # Listă de linkuri critice pe care Android le folosește pentru descărcare
+        LINKURI=(
+          "https://googleapis.com"
+          "https://github.com"
+          "https://googlesource.com"
+        )
+
+        for url in "${LINKURI[@]}"; do
+          echo "Se testează conexiunea către: $url"
+          # Trimite o cerere rapidă (HEAD) și verifică dacă serverul răspunde cu succes (cod 200, 301 sau 302)
+          STATUS=$(curl -o /dev/null -s -w "%{http_code}" --head --request GET "$url" --timeout 10)
+          
+          if [ "$STATUS" -eq 200 ] || [ "$STATUS" -eq 301 ] || [ "$STATUS" -eq 302 ]; then
+            echo " [OK] Linkul funcționează perfect (Cod HTTP: $STATUS)"
+          else
+            echo " [EROARE CRITICĂ] Linkul nu este accesibil sau e picat! (Cod HTTP: $STATUS)"
+            echo "Compilarea BestiaOS a fost oprită pentru a preveni un eșec mai târziu."
+            exit 1 # Oprește forțat workflow-ul GitHub Actions în acest punct exact
+          fi
+        done
+        echo "Toate testele rapide au trecut cu succes! Se pornește compilarea BestiaOS..."
+
+    # ==========================================
+    # CONTINUAREA PROCESULUI (Doar dacă testul e OK)
+    # ==========================================
+
     - name: Maximizare Spațiu Brut (Extrem)
       run: |
         docker rmi $(docker images -q) || true
@@ -25,7 +65,6 @@ jobs:
       run: |
         sudo apt-get update && sudo apt-get install -y bc bison build-essential ccache curl flex g++-multilib gcc-multilib git gnupg gperf lib32readline-dev lib32z1-dev libelf-dev liblz4-tool libssl-dev libxml2-utils lzops pngcrush rsync schedtool squashfs-tools xsltproc zip zlib1g-dev
         
-    # TRUCUL 2: Restaurare bucăți compilate anterior (dacă există)
     - name: Restaurare Cache Compilare (ccache)
       uses: actions/cache@v4
       with:
@@ -43,19 +82,17 @@ jobs:
         git config --global user.name "BestiaOS Developer"
         git config --global user.email "developer@bestiaos.local"
 
-    # TRUCUL 3: Sincronizare parțială (Doar ce este strict necesar)
     - name: Sincronizare Surse Android
       run: |
         mkdir android-source && cd android-source
         repo init -u https://github.com -b lineage-20.0 --git-lfs --depth=1
         repo sync -c -j$(nproc --all) --force-sync --no-clone-bundle --no-tags
 
-    # TRUCUL 4: Activare CCACHE pentru a salva progresul pe bucăți
     - name: Configurare CCACHE
       run: |
         export USE_CCACHE=1
         export CCACHE_EXEC=/usr/bin/ccache
-        ccache -M 30G # Alocăm 30GB doar pentru bucățile compilate salvate
+        ccache -M 30G
         ccache -z
 
     - name: Compilare Modulară BestiaOS
@@ -63,9 +100,8 @@ jobs:
         cd android-source
         source build/envsetup.sh
         # lunch lineage_dispozitiv-userdebug
-        # m bacon -j$(nproc --all) || echo "Compilarea s-a oprit, dar salvăm progresul!"
+        # m bacon -j$(nproc --all) || echo "Compilarea s-a oprit controlat, salvăm progresul în cache!"
 
-    # TRUCUL 5: Verificăm cât s-a compilat și afișăm statistica
     - name: Salvare și Afișare Status Cache
       run: |
         ccache -s
