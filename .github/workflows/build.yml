@@ -1,19 +1,16 @@
 name: Build bestiaOS
 
 on:
-  workflow_dispatch: # Permite rularea manuală din tab-ul Actions pe GitHub
-  push:
-    branches: [ main, master ]
+  workflow_dispatch:
 
 jobs:
   build:
     runs-on: ubuntu-22.04
-    
     steps:
     - name: Checkout repository
       uses: actions/checkout@v4
 
-    - name: Eliberare spațiu pe disc (Crucial pentru Android)
+    - name: Eliberare spațiu pe disc (Maxim pe runner)
       uses: jlumbroso/free-disk-space@main
       with:
         tool-cache: true
@@ -24,21 +21,34 @@ jobs:
         docker-images: true
         swap-storage: false
 
+    - name: Instalare unelte de sistem pentru Android
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y git python3 python3-pip curl repo bc bison build-essential ccache curl flex g++-multilib gcc-multilib git gnupg gperf lib32ncurses5-dev liblz4-tool libncurses5 libncurses5-dev libsdl1.2-dev libssl-dev libxml2 libxml2-utils lzop pngcrush rsync schedtool squashfs-tools xsltproc yasm zip zlib1g-dev
+        git config --global user.name "bestiaOS-Builder"
+        git config --global user.email "builder@bestiaos.local"
+
     - name: Set up Python
       uses: actions/setup-python@v5
       with:
         python-version: '3.10'
 
     - name: Instalare dependențe Python
-      run: |
-        python -m pip install --upgrade pip
-        pip install requests
+      run: pip install requests
 
-    - name: Rulează scriptul de verificare și curățare bestiaOS
+    - name: Rulează scriptul de verificare linkuri și curățare
       run: python bestia_check.py
 
-    - name: Inițializare și compilare (Placeholder)
+    - name: Inițializare și Sync Android (Mod Superficial pentru a nu depăși spațiul)
       run: |
-        echo "Spațiul liber pe disc:"
-        df -h
-        echo "Aici adaugi comenzile de repo init, sync superficial și build pentru bestiaOS."
+        mkdir -p ~/android/os
+        cd ~/android/os
+        repo init -u https://github.com/LineageOS/android.git -b lineage-20.0 --depth=1
+        repo sync -c --no-clone-bundle --no-tags --optimized-fetch --prune --force-sync -j8
+
+    - name: Compilare bestiaOS
+      run: |
+        cd ~/android/os
+        source build/envsetup.sh
+        lunch lineage_arm64-userdebug
+        mka bacon -j8
