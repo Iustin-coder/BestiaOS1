@@ -77,16 +77,22 @@ jobs:
     - name: Rulează scriptul de verificare linkuri și curățare
       run: python bestia_check.py
 
-    - name: Inițializare și Sync Android (Mod Superficial)
+    - name: Inițializare și Sync Android (AOSP Generic ARM64)
       run: |
         mkdir -p ~/android/os
         cd ~/android/os
-        repo init -u https://github.com/LineageOS/android.git -b lineage-20.0 --depth=1
+        repo init -u https://android.googlesource.com/platform/manifest -b android-13.0.0_r30 --depth=1
         repo sync -c --no-clone-bundle --no-tags --optimized-fetch --prune --force-sync -j8
 
     - name: Compilare bestiaOS
       run: |
         cd ~/android/os
         source build/envsetup.sh
-        lunch lineage_arm64-userdebug
+        lunch aosp_arm64-userdebug
         mka bacon -j8
+
+    - name: Salvare artefact (ZIP-ul final)
+      uses: actions/upload-artifact@v4
+      with:
+        name: bestiaOS-build-zip
+        path: ~/android/os/out/target/product/*/*.zip
