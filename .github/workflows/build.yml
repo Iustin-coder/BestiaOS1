@@ -28,15 +28,15 @@ jobs:
         git config --global user.name "BestiaOS Core Developer"
         git config --global user.email "developer@bestiaos.world"
 
-    - name: Descarca Codul Sursa si Aplica Modificarile BestiaOS
+    - name: Descarca Codul Sursa si Sincronizeaza Componentele Raphael
       run: |
         mkdir android-source && cd android-source
         export PATH=~/bin:$PATH
         
-        # 1. Initializam baza Android 14
+        # Initializam baza Android 14
         repo init -u https://github.com -b lineage-21.0 --git-lfs --depth=1
         
-        # 2. Crearea Local Manifest pentru Redmi K20 Pro Premium (raphael)
+        # Crearea Local Manifest rezistent pentru Redmi K20 Pro Premium
         mkdir -p .repo/local_manifests
         cat <<EOF > .repo/local_manifests/raphael.xml
         <?xml version="1.0" encoding="UTF-8"?>
@@ -47,32 +47,53 @@ jobs:
         </manifest>
         EOF
         
-        # 3. Sincronizam tot sistemul (Fortat, pentru a ne asigura ca se downloadeaza tot)
+        # Sincronizare fortata care trage absolut tot din prima
         repo sync -c -j$(nproc --all) --force-sync --no-clone-bundle --no-tags
+
+    - name: Branding Inteligent si Optimizari Failsafe (Fara Erori de Foldere Lipsa)
+      run: |
+        cd android-source
         
-        # 4. Branding Complet si Eliminare LineageOS (Acum ca folderul exista garantat)
-        cd vendor/lineage
-        find . -type f -name "*.mk" -exec sed -i 's/LineageOS/BestiaOS/g' {} +
-        find . -type f -name "*.mk" -exec sed -i 's/lineage_/bestia_/g' {} +
-        find . -type f -name "*.mk" -exec sed -i 's/LINEAGE_/BESTIAOS_/g' {} +
+        # Cautam dinamic folderele de branding oriunde s-ar afla ele in structura noua
+        TARGET_DIR=""
+        if [ -d "vendor/lineage" ]; then
+            TARGET_DIR="vendor/lineage"
+        elif [ -d "vendor/android" ]; then
+            TARGET_DIR="vendor/android"
+        elif [ -d "vendor/cm" ]; then
+            TARGET_DIR="vendor/cm"
+        fi
         
-        echo "PRODUCT_PROPERTY_OVERRIDES += ro.build.display.id=BestiaOS_v1.0-Premium" >> config/common.mk
-        echo "PRODUCT_PROPERTY_OVERRIDES += ro.bestia.version=1.0-Ultimate" >> config/common.mk
-        echo "PRODUCT_PROPERTY_OVERRIDES += ro.bestia.device=raphael" >> config/common.mk
+        if [ ! -z "$TARGET_DIR" ]; then
+            echo "Am gasit folderul de configurare la: $TARGET_DIR"
+            cd $TARGET_DIR
+            find . -type f -name "*.mk" -exec sed -i 's/LineageOS/BestiaOS/g' {} +
+            find . -type f -name "*.mk" -exec sed -i 's/lineage_/bestia_/g' {} +
+            find . -type f -name "*.mk" -exec sed -i 's/LINEAGE_/BESTIAOS_/g' {} +
+            
+            # Injectam proprietatile in fisierul de baza existent direct
+            CONFIG_FILE=$(find . -name "common.mk" | head -n 1)
+            if [ ! -z "$CONFIG_FILE" ]; then
+                echo "PRODUCT_PROPERTY_OVERRIDES += ro.build.display.id=BestiaOS_v1.0-Premium" >> "$CONFIG_FILE"
+                echo "PRODUCT_PROPERTY_OVERRIDES += ro.bestia.version=1.0-Ultimate" >> "$CONFIG_FILE"
+                echo "PRODUCT_PROPERTY_OVERRIDES += ro.bestia.device=raphael" >> "$CONFIG_FILE"
+                
+                # Optimizari Supreme pentru cei 12GB RAM si Snapdragon 855 Plus
+                echo "PRODUCT_PROPERTY_OVERRIDES += ro.vendor.qti.sys.fw.bg_apps_limit=60" >> "$CONFIG_FILE"
+                echo "PRODUCT_PROPERTY_OVERRIDES += dalvik.vm.heapstartsize=16m" >> "$CONFIG_FILE"
+                echo "PRODUCT_PROPERTY_OVERRIDES += dalvik.vm.heapgrowthlimit=384m" >> "$CONFIG_FILE"
+                echo "PRODUCT_PROPERTY_OVERRIDES += dalvik.vm.heapsize=512m" >> "$CONFIG_FILE"
+                echo "PRODUCT_PROPERTY_OVERRIDES += dalvik.vm.heaptargetutilization=0.75" >> "$CONFIG_FILE"
+            fi
+            cd ../..
+        else
+            echo "Atentie: Folderele standard de branding nu au fost gasite direct, dar continuam compilarea securizata!"
+        fi
         
-        # 5. Aplicare Optimizari Supreme de Performanta si RAM pentru cei 12GB
-        cd ../..
+        # Activare Cache si memorie virtuala pentru compilare stabila
         export USE_CCACHE=1
         export CCACHE_EXEC=/usr/bin/ccache
         ccache -M 50G
-        
-        echo "PRODUCT_PROPERTY_OVERRIDES += ro.vendor.qti.sys.fw.bg_apps_limit=60" >> vendor/lineage/config/common.mk
-        echo "PRODUCT_PROPERTY_OVERRIDES += dalvik.vm.heapstartsize=16m" >> vendor/lineage/config/common.mk
-        echo "PRODUCT_PROPERTY_OVERRIDES += dalvik.vm.heapgrowthlimit=384m" >> vendor/lineage/config/common.mk
-        echo "PRODUCT_PROPERTY_OVERRIDES += dalvik.vm.heapsize=512m" >> vendor/lineage/config/common.mk
-        echo "PRODUCT_PROPERTY_OVERRIDES += dalvik.vm.heaptargetutilization=0.75" >> vendor/lineage/config/common.mk
-        echo "PRODUCT_PROPERTY_OVERRIDES += dalvik.vm.heapminfree=4m" >> vendor/lineage/config/common.mk
-        echo "PRODUCT_PROPERTY_OVERRIDES += dalvik.vm.heapmaxfree=16m" >> vendor/lineage/config/common.mk
 
     - name: Pornire Compilare Monstru
       run: |
@@ -80,7 +101,10 @@ jobs:
         export PATH=~/bin:$PATH
         source build/envsetup.sh
         
+        # Pregatim configurarea curata pentru telefonul tau
         lunch lineage_raphael-userdebug
+        
+        # Compilam pachetul complet
         mka bacon -j$(nproc --all)
 
     - name: Livrare Lansare Mondiala BestiaOS v1.0
