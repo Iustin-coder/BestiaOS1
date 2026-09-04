@@ -1,7 +1,7 @@
 name: Build BestiaOS Modular cu Verificare Safety
 
 on:
-  workflow_dispatch:
+  workflow_dispatch: # Îți permite să pornești build-ul manual din interfața GitHub Actions
 
 jobs:
   pre_check_and_build:
@@ -14,12 +14,10 @@ jobs:
     # ==========================================
     # PASUL DE SIGURANȚĂ ȘI VERIFICARE RAPIDĂ
     # ==========================================
-    
     - name: Verificare Sintaxă și Validare Linkuri de Descărcare
       run: |
         echo "=== FAZA 1: Verificare erori de sintaxă în scripturi ==="
-        # Verifică dacă există erori de sintaxă în toate scripturile .sh din repository
-        # Dacă găsește o eroare de scriere, bash -n va opri imediat rularea
+        # Caută și verifică toate scripturile de tip .sh din repository
         for script in $(find . -name "*.sh"); do
           echo "Se verifică sintaxa pentru: $script"
           bash -n "$script"
@@ -36,8 +34,8 @@ jobs:
 
         for url in "${LINKURI[@]}"; do
           echo "Se testează conexiunea către: $url"
-          # Trimite o cerere rapidă (HEAD) și verifică dacă serverul răspunde cu succes (cod 200, 301 sau 302)
-          STATUS=$(curl -o /dev/null -s -w "%{http_code}" --head --request GET "$url" --timeout 10)
+          # S-a corectat parametrul de timp la --connect-timeout
+          STATUS=$(curl -o /dev/null -s -w "%{http_code}" --head --request GET "$url" --connect-timeout 10)
           
           if [ "$STATUS" -eq 200 ] || [ "$STATUS" -eq 301 ] || [ "$STATUS" -eq 302 ]; then
             echo " [OK] Linkul funcționează perfect (Cod HTTP: $STATUS)"
@@ -50,17 +48,20 @@ jobs:
         echo "Toate testele rapide au trecut cu succes! Se pornește compilarea BestiaOS..."
 
     # ==========================================
-    # CONTINUAREA PROCESULUI (Doar dacă testul e OK)
+    # CURĂȚARE EXTREMĂ PENTRU MAXIMIZARE SPAȚIU
     # ==========================================
-
     - name: Maximizare Spațiu Brut (Extrem)
       run: |
+        echo "Eliminăm pachetele uriașe preinstalate de GitHub pentru a elibera ~70-80 GB..."
         docker rmi $(docker images -q) || true
         sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /usr/local/share/boost $AGENT_TOOLSDIRECTORY
         sudo apt-get clean
         sudo rm -rf /var/lib/apt/lists/*
         df -h
 
+    # ==========================================
+    # INSTALARE DEPENDENȚE ȘI REPO TOOL
+    # ==========================================
     - name: Instalare Dependențe Android
       run: |
         sudo apt-get update && sudo apt-get install -y bc bison build-essential ccache curl flex g++-multilib gcc-multilib git gnupg gperf lib32readline-dev lib32z1-dev libelf-dev liblz4-tool libssl-dev libxml2-utils lzops pngcrush rsync schedtool squashfs-tools xsltproc zip zlib1g-dev
@@ -82,9 +83,13 @@ jobs:
         git config --global user.name "BestiaOS Developer"
         git config --global user.email "developer@bestiaos.local"
 
+    # ==========================================
+    # SINCRONIZARE ȘI COMPILARE ANDROID
+    # ==========================================
     - name: Sincronizare Surse Android
       run: |
         mkdir android-source && cd android-source
+        # Folosim --depth=1 pentru a descărca doar ultima versiune a codului, economisind zeci de giga
         repo init -u https://github.com -b lineage-20.0 --git-lfs --depth=1
         repo sync -c -j$(nproc --all) --force-sync --no-clone-bundle --no-tags
 
@@ -92,13 +97,14 @@ jobs:
       run: |
         export USE_CCACHE=1
         export CCACHE_EXEC=/usr/bin/ccache
-        ccache -M 30G
+        ccache -M 30G # Alocăm spațiu dedicat în mașina virtuală pentru bucățile compilate salvate
         ccache -z
 
     - name: Compilare Modulară BestiaOS
       run: |
         cd android-source
         source build/envsetup.sh
+        # Activează liniile de mai jos (ștergând caracterul '#') când adaugi device tree-ul tău:
         # lunch lineage_dispozitiv-userdebug
         # m bacon -j$(nproc --all) || echo "Compilarea s-a oprit controlat, salvăm progresul în cache!"
 
