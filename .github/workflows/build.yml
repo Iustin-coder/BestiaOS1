@@ -1,96 +1,52 @@
-name: Build Dinamic BestiaOS (Redmi K20 Pro Premium)
+name: Build Rapid BestiaOS GSI (Android 15)
 
 on:
-  workflow_dispatch: # Permite pornirea manuală din tab-ul Actions
+  workflow_dispatch: # Îți permite să pornești compilarea manual din tab-ul Actions
 
 jobs:
   build:
-    runs-on: ubuntu-22.04
-    permissions:
-      contents: write
+    runs-on: ubuntu-latest
 
     steps:
     - name: Verificare Cod Repository
       uses: actions/checkout@v4
 
-    - name: Maximizare Dinamică Spațiu pe Disc (Curățare Completă)
-      uses: easimon/maximize-build-space@master
-      with:
-        root-reserve-mb: 2048
-        swap-size-mb: 1024
-        remove-dotnet: 'true'
-        remove-android: 'true'
-        remove-haskell: 'true'
-        remove-codeql: 'true'
-        remove-docker-images: 'true'
-
-    - name: Configurare Automată Dependențe și Pachete Sistem
+    - name: Configurare Mediu de Lucru
       run: |
         sudo apt-get update
-        sudo apt-get install -y bc bison build-essential ccache curl flex g++-multilib gcc-multilib git gnupg gperf imagemagick lib32readline-dev lib32z1-dev libelf-dev liblz4-tool libsdl1.2-dev libssl-dev libxml2 libxml2-utils lzop pngcrush rsync schedtool squashfs-tools xsltproc zip zlib1g-dev jq
+        sudo apt-get install -y git wget zip unzip python3 python3-pip openjdk-17-jdk jq
 
-    - name: Descărcare Dinamică Instrument Repo (Caută automat link-ul oficial stabil)
+    - name: Descărcare Unelte Modificare GSI (Erfan Tools)
       run: |
-        mkdir -p ~/bin
-        # Folosește API-ul GitHub pentru a extrage automat URL-ul ultimei versiuni stabile de repo
-        REPO_URL=$(curl -s https://github.com | jq -r '.assets[] | select(.name=="repo") | .browser_download_url')
-        
-        # Dacă API-ul dă eroare, folosește un fallback inteligent direct din ramura principală
-        if [ -z "$REPO_URL" ] || [ "$REPO_URL" == "null" ]; then
-          REPO_URL="https://githubusercontent.com"
-        fi
-        
-        echo "Descărcare dinamică 'repo' de la: $REPO_URL"
-        curl -sSL "$REPO_URL" > ~/bin/repo
-        chmod a+x ~/bin/repo
-        sudo ln -sf ~/bin/repo /usr/bin/repo
+        git clone --depth=1 https://github.com ~/ErfanGSIs
+        cd ~/ErfanGSIs
+        # Instalează cerințele de sistem pentru tool
+        sudo bash setup.sh
 
-    - name: Sincronizare Surse Android (Inițializare BestiaOS)
+    - name: Descărcare Bază Android 15 Oficială (Google AOSP)
       run: |
-        git config --global user.name "BestiaOS Developer"
-        git config --global user.email "developer@bestiaos.local"
-        mkdir -p ~/android
-        cd ~/android
-        # Inițializează și descarcă doar istoricul minim (--depth=1) pentru a economisi spațiu
-        repo init -u https://github.com -b lineage-22.0 --git-lfs --depth=1
-        repo sync -c -j$(nproc --all) --force-sync --no-clone-bundle --no-tags
+        mkdir -p ~/input
+        cd ~/input
+        # Descarcă imaginea de bază oficială de Android 15 oferită de Google pentru telefoane Pixel/Treble
+        wget -O android15_base.zip https://google.com
 
-    - name: Preluare Automată și Dinamică Drivere Redmi K20 Pro Premium (raphael)
+    - name: Generare și Optimizare BestiaOS pentru Redmi K20 Pro
       run: |
-        cd ~/android
-        
-        # Detectează automat dacă există ramura de Android 15 (lineage-22), altfel face fallback la cea mai recentă versiune disponibilă
-        get_best_branch() {
-          local repo_name=$1
-          if git ls-remote --heads "https://github.com" | grep -q "refs/heads/lineage-22.0"; then
-            echo "lineage-22.0"
-          else
-            echo "lineage-21.0"
-          fi
-        }
+        cd ~/ErfanGSIs
+        # Tool-ul preia imaginea oficială și o transformă într-un format compatibil cu telefoanele Project Treble (cum e Redmi K20 Pro)
+        # „AB” este formatul de partiție pentru sistemele noi de Android
+        ./url2gsi.sh ~/input/android15_base.zip AB
 
-        DEVICE_BRANCH=$(get_best_branch "LineageOS/android_device_xiaomi_raphael")
-        KERNEL_BRANCH=$(get_best_branch "LineageOS/android_kernel_xiaomi_raphael")
-        VENDOR_BRANCH=$(get_best_branch "TheMuppets/proprietary_vendor_xiaomi_raphael")
-
-        echo "Sursă Device Tree identificată dinamic pe ramura: $DEVICE_BRANCH"
-        git clone https://github.com -b "$DEVICE_BRANCH" device/xiaomi/raphael --depth=1
-        
-        echo "Sursă Kernel identificată dinamic pe ramura: $KERNEL_BRANCH"
-        git clone https://github.com -b "$KERNEL_BRANCH" kernel/xiaomi/raphael --depth=1
-        
-        echo "Sursă Vendor identificată dinamic pe ramura: $VENDOR_BRANCH"
-        git clone https://github.com -b "$VENDOR_BRANCH" vendor/xiaomi/raphael --depth=1
-
-    - name: Compilare Sistem de Operare (Bake BestiaOS)
+    - name: Pregătire Fișier ZIP Final
       run: |
-        cd ~/android
-        source build/envsetup.sh
-        lunch lineage_raphael-userdebug
-        mka bacon -j$(nproc --all)
+        mkdir -p ~/output
+        cd ~/ErfanGSIs/output/
+        # Redenumim fișierul final în BestiaOS
+        mv *.img BestiaOS-Android15-RedmiK20Pro.img
+        zip -r ~/output/BestiaOS-Android15-RedmiK20Pro.zip BestiaOS-Android15-RedmiK20Pro.img
 
-    - name: Încărcare Produs Final (Arhivă BestiaOS .zip)
+    - name: Încărcare Produs Final (ROM .zip)
       uses: actions/upload-artifact@v4
       with:
-        name: BestiaOS-RedmiK20Pro-Stable
-        path: ~/android/out/target/product/raphael/*.zip
+        name: BestiaOS-Android15-RedmiK20Pro
+        path: /home/runner/output/*.zip
