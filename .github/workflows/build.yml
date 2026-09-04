@@ -1,7 +1,7 @@
-name: Compilare BestiaOS Ultimate Failsafe
+name: Compilare BestiaOS Ultimate Failsafe Active
 
 on:
-  workflow_dispatch: # Pornire manuala dintr-un singur click
+  workflow_dispatch: # Pornire manuala din interfata
 
 jobs:
   build:
@@ -33,34 +33,37 @@ jobs:
         mkdir android-source && cd android-source
         export PATH=~/bin:$PATH
         
-        # Initializam direct codul de baza dintr-un singur punct stabil
-        repo init -u https://github.com -b lineage-21.0 --depth=1 --clone-bundle
+        # Initializam codul de baza pe ramura ACTIVA (lineage-20.0 - Android 13)
+        repo init -u https://github.com -b lineage-20.0 --depth=1 --clone-bundle
         
-        # Injectam automat tabelul XML cu driverele si modulele pentru Redmi K20 Pro Premium
+        # Injectam tabelul XML cu ramurile active corecte pentru Redmi K20 Pro Premium
         mkdir -p .repo/local_manifests
         cat <<EOF > .repo/local_manifests/raphael.xml
         <?xml version="1.0" encoding="UTF-8"?>
         <manifest>
-          <project name="LineageOS/android_device_xiaomi_raphael" path="device/xiaomi/raphael" remote="github" revision="lineage-21.0" />
-          <project name="LineageOS/android_kernel_xiaomi_sm8150" path="kernel/xiaomi/sm8150" remote="github" revision="lineage-21.0" />
-          <project name="TheMuppets/proprietary_vendor_xiaomi_raphael" path="vendor/xiaomi/raphael" remote="github" revision="lineage-21.0" />
+          <project name="LineageOS/android_device_xiaomi_raphael" path="device/xiaomi/raphael" remote="github" revision="lineage-20.0" />
+          <project name="LineageOS/android_kernel_xiaomi_sm8150" path="kernel/xiaomi/sm8150" remote="github" revision="lineage-20.0" />
+          <project name="TheMuppets/proprietary_vendor_xiaomi_raphael" path="vendor/xiaomi/raphael" remote="github" revision="lineage-20.0" />
         </manifest>
         EOF
         
-        # Descarcam totul intr-un singur proces comprimat ca sa nu blocam banda serverului
+        # Descarcam datele reale de pe servere
         repo sync -c -j$(nproc --all) --force-sync --no-clone-bundle --no-tags --prune
 
     - name: Aplicare Branding BestiaOS si Optimizari 12GB RAM
       run: |
         cd android-source
         
-        # Cautam fisierul de meniuri automat si redenumim sistemul
+        # Verificare stricta: Daca descarcarea a esuat din nou, oprim procesul cu explicatie clara
+        if [ ! -d "vendor" ]; then
+            echo "Eroare critica: Serverele externe au blocat conexiunea. Folderul vendor lipseste." && exit 1
+        fi
+        
         CONFIG_PATH=$(find vendor/ -name "common.mk" | head -n 1)
         if [ ! -z "$CONFIG_PATH" ]; then
             DIR_BRANDING=$(dirname "$CONFIG_PATH")
             find "$DIR_BRANDING" -type f -name "*.mk" -exec sed -i 's/LineageOS/BestiaOS/g' {} +
             
-            # Schimbam textele din meniuri si setam limite ridicate pentru performanta
             echo "PRODUCT_PROPERTY_OVERRIDES += ro.build.display.id=BestiaOS_v1.0-Premium" >> "$CONFIG_PATH"
             echo "PRODUCT_PROPERTY_OVERRIDES += ro.bestia.version=1.0-Ultimate" >> "$CONFIG_PATH"
             echo "PRODUCT_PROPERTY_OVERRIDES += ro.vendor.qti.sys.fw.bg_apps_limit=60" >> "$CONFIG_PATH"
@@ -72,10 +75,9 @@ jobs:
         cd android-source
         export PATH=~/bin:$PATH
         
-        # Verificare suplimentara: daca fisierul de configurare lipseste din motive de server, il cream
+        # Daca mediul de build nu s-a descarcat, oprim executia curat
         if [ ! -f "build/envsetup.sh" ]; then
-            echo "Aparut incident de retea. Re-sincronizam structura build..."
-            repo sync -d build/make || exit 1
+            echo "Eroare critica: Fisierele de compilare esentiale nu au fost gasite." && exit 1
         fi
         
         source build/envsetup.sh
