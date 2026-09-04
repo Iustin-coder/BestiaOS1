@@ -36,10 +36,48 @@ jobs:
     - name: Instalare dependențe Python
       run: pip install requests
 
+    - name: Creează automat scriptul de verificare
+      run: |
+        cat << 'EOF' > bestia_check.py
+        import os
+        import sys
+        import requests
+
+        LINKS_TO_CHECK = []
+
+        def verify_links():
+            print("-> Verificare linkuri (se detecteaza pagini HTML în loc de fișiere brute)...")
+            for url in LINKS_TO_CHECK:
+                try:
+                    response = requests.get(url, timeout=10)
+                    content_lower = response.text.lower()
+                    if "<!doctype" in content_lower or "<html" in content_lower:
+                        print(f"EROARE: Linkul {url} returnează o pagină web (HTML), nu fișierul brut!")
+                        sys.exit(1)
+                    else:
+                        print(f"OK: {url}")
+                except Exception as e:
+                    print(f"Eroare la verificare pentru {url}: {e}")
+                    sys.exit(1)
+
+        def aggressive_clean():
+            print("-> Curățare agresivă a spațiului pe GitHub Actions...")
+            junk_dirs = ["out", ".ccache", "build/temp", ".repo/project-objects"]
+            for directory in junk_dirs:
+                if os.path.exists(directory):
+                    os.system(f"rm -rf {directory}")
+                    print(f"S-a șters folderul consumator de spațiu: {directory}")
+            print("Curățare finalizată. Spațiu optimizat!")
+
+        if __name__ == "__main__":
+            verify_links()
+            aggressive_clean()
+        EOF
+
     - name: Rulează scriptul de verificare linkuri și curățare
       run: python bestia_check.py
 
-    - name: Inițializare și Sync Android (Mod Superficial pentru a nu depăși spațiul)
+    - name: Inițializare și Sync Android (Mod Superficial)
       run: |
         mkdir -p ~/android/os
         cd ~/android/os
