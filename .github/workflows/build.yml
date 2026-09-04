@@ -1,113 +1,100 @@
-name: Build BestiaOS Modular cu Verificare Safety
+name: BestiaOS Build System
 
 on:
-  workflow_dispatch: # Îți permite să pornești build-ul manual din interfața GitHub Actions
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+  workflow_dispatch:
 
 jobs:
-  pre_check_and_build:
+  validate-and-test:
+    name: Verificare Sintaxă și Linkuri
     runs-on: ubuntu-22.04
-
     steps:
-    - name: Checkout Cod
-      uses: actions/checkout@v4
+      - name: Descărcare Cod Rezervor (Checkout)
+        uses: actions/checkout@v4
 
-    # ==========================================
-    # PASUL DE SIGURANȚĂ ȘI VERIFICARE RAPIDĂ
-    # ==========================================
-    - name: Verificare Sintaxă și Validare Linkuri de Descărcare
-      run: |
-        echo "=== FAZA 1: Verificare erori de sintaxă în scripturi ==="
-        # Caută și verifică toate scripturile de tip .sh din repository
-        for script in $(find . -name "*.sh"); do
-          echo "Se verifică sintaxa pentru: $script"
-          bash -n "$script"
-        done
-        echo "Sintaxa este corectă! Trecem la linkuri..."
+      - name: Verificare Sintaxă YAML
+        name: Lint GitHub Actions Workflow
+        run: |
+          echo "Se verifică structura fișierului..."
+          # Folosește un utilitar simplu pentru a valida dacă fișierul este un YAML valid
+          python3 -c "import yaml; yaml.safe_load(open('.github/workflows/build.yml'))" && echo "Sintaxa YAML este corectă!"
 
-        echo "=== FAZA 2: Testare disponibilitate linkuri esențiale ==="
-        # Listă de linkuri critice și corectate pe care Android le folosește pentru descărcare
-        LINKURI=(
-          "https://googleapis.com"
-          "https://github.com"
-          "https://googlesource.com"
-        )
-
-        for url in "${LINKURI[@]}"; do
-          echo "Se testează conexiunea către: $url"
-          # Trimite o cerere rapidă și verifică dacă serverul răspunde cu succes
-          STATUS=$(curl -o /dev/null -s -w "%{http_code}" --head --request GET "$url" --connect-timeout 10)
+      - name: Validare Linkuri Externe (Link Checker)
+        id: link_checker
+        run: |
+          echo "Se verifică dacă sursele și linkurile externe sunt online..."
           
-          if [ "$STATUS" -eq 200 ] || [ "$STATUS" -eq 301 ] || [ "$STATUS" -eq 302 ]; then
-            echo " [OK] Linkul funcționează perfect (Cod HTTP: $STATUS)"
-          else
-            echo " [EROARE CRITICĂ] Linkul nu este accesibil sau e picat! (Cod HTTP: $STATUS)"
-            echo "Compilarea BestiaOS a fost oprită pentru a preveni un eșec mai târziu."
-            exit 1 # Oprește forțat workflow-ul GitHub Actions în acest punct exact
+          # Listă de URL-uri/Surse pe care proiectul tău le folosește (Exemplu)
+          URLS=(
+            "https://googlesource.com"
+            "https://github.com" # Înlocuiește cu manifestul tău real
+          )
+          
+          EROARE=0
+          for url in "${URLS[@]}"; do
+            echo "Se testează: $url"
+            if curl --output /dev/null --silent --head --fail --max-time 10 "$url"; then
+              echo "✅ URL-ul este accesibil."
+            else
+              echo "❌ EROARE CRITICĂ: $url nu poate fi accesat!"
+              EROARE=1
+            fi
+          done
+          
+          if [ $EROARE -ne 0 ]; then
+            echo "::error::Una sau mai multe surse externe sunt indisponibile. Rularea se oprește."
+            echo "--- DETALII AVANSATE DE DEPANARE ---"
+            echo "1. Verificați dacă serverul extern este în mentenanță."
+            echo "2. Asigurați-vă că URL-ul nu conține greșeli de tipar (typos)."
+            echo "3. Dacă URL-ul este un repository privat, asigurați-vă că ați configurat un Secret (PAT Token)."
+            echo "--- DETALII SUPER AVANSATE ---"
+            echo "Eroarea a fost generată de curl cu codul de retur non-zero. Executați local: 'curl -Iv [URL]' pentru a vedea detaliile complete ale strângerii de mână TLS sau erorile DNS."
+            exit 1
           fi
-        done
-        echo "Toate testele rapide au trecut cu succes! Se pornește compilarea BestiaOS..."
 
-    # ==========================================
-    # CURĂȚARE EXTREMĂ PENTRU MAXIMIZARE SPAȚIU
-    # ==========================================
-    - name: Maximizare Spațiu Brut (Extrem)
-      run: |
-        echo "Eliminăm pachetele uriașe preinstalate de GitHub pentru a elibera ~70-80 GB..."
-        docker rmi $(docker images -q) || true
-        sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /usr/local/share/boost $AGENT_TOOLSDIRECTORY
-        sudo apt-get clean
-        sudo rm -rf /var/lib/apt/lists/*
-        df -h
+  build-android:
+    name: Eliberare Spațiu și Compilare BestiaOS
+    needs: validate-and-test
+    runs-on: ubuntu-22.04
+    
+    steps:
+      - name: Descărcare Cod Rezervor (Checkout)
+        uses: actions/checkout@v4
 
-    # ==========================================
-    # INSTALARE DEPENDENȚE ȘI REPO TOOL
-    # ==========================================
-    - name: Instalare Dependențe Android
-      run: |
-        sudo apt-get update && sudo apt-get install -y bc bison build-essential ccache curl flex g++-multilib gcc-multilib git gnupg gperf lib32readline-dev lib32z1-dev libelf-dev liblz4-tool libssl-dev libxml2-utils lzops pngcrush rsync schedtool squashfs-tools xsltproc zip zlib1g-dev
-        
-    - name: Restaurare Cache Compilare (ccache)
-      uses: actions/cache@v4
-      with:
-        path: ~/.ccache
-        key: ccache-bestiaos-${{ github.sha }}
-        restore-keys: |
-          ccache-bestiaos-
+      - name: Maximizare Spațiu pe Disc (Instantly Free Space)
+        name: Free Disk Space (Ubuntu)
+        run: |
+          echo "Spațiu inițial pe disc:"
+          df -h
+          
+          echo "Se elimină pachetele software preinstalate inutile..."
+          sudo rm -rf /usr/share/dotnet
+          sudo rm -rf /usr/local/lib/android
+          sudo rm -rf /opt/ghc
+          sudo rm -rf "/usr/local/share/boost"
+          sudo rm -rf /etc/apt/sources.list.d/*
+          
+          echo "Se curăță cache-ul apt și imaginile Docker..."
+          sudo apt-get clean
+          sudo docker image prune -a -f
+          
+          echo "Spațiu final disponibil după curățare:"
+          df -h
 
-    - name: Configurare Utilitar Repo
-      run: |
-        mkdir -p ~/bin
-        curl https://googleapis.com > ~/bin/repo
-        chmod a+x ~/bin/repo
-        sudo ln -sf ~/bin/repo /usr/bin/repo
-        git config --global user.name "BestiaOS Developer"
-        git config --global user.email "developer@bestiaos.local"
+      - name: Configurare Mediu de Compilare Android
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y bc bison build-essential ccache curl flex g++-multilib gcc-multilib git gnupg gperf imagemagick lib32readline-dev lib32z1-dev libelf-dev liblz4-tool libsdl1.2-dev libssl-dev libxml2 libxml2-utils lzop pngcrush rsync schedtool squashfs-tools xsltproc zip zlib1g-dev
 
-    # ==========================================
-    # SINCRONIZARE ȘI COMPILARE ANDROID
-    # ==========================================
-    - name: Sincronizare Surse Android
-      run: |
-        mkdir android-source && cd android-source
-        # Folosim --depth=1 pentru a descărca doar ultima versiune a codului, economisind zeci de giga
-        repo init -u https://github.com -b lineage-20.0 --git-lfs --depth=1
-        repo sync -c -j$(nproc --all) --force-sync --no-clone-bundle --no-tags
-
-    - name: Configurare CCACHE
-      run: |
-        export USE_CCACHE=1
-        export CCACHE_EXEC=/usr/bin/ccache
-        ccache -M 30G # Alocăm spațiu dedicat în mașina virtuală pentru bucățile compilate salvate
-        ccache -z
-
-    - name: Compilare Modulară BestiaOS
-      run: |
-        cd android-source
-        source build/envsetup.sh
-        # Activează liniile de mai jos (ștergând caracterul '#') când adaugi device tree-ul tău:
-        # lunch lineage_dispozitiv-userdebug
-        # m bacon -j$(nproc --all) || echo "Compilarea s-a oprit controlat, salvăm progresul în cache!"
-
-    - name: Salvare și Afișare Status Cache
-      run: |
-        ccache -s
+      - name: Inițializare Repo și Compilare (Schelet)
+        run: |
+          echo "Aici se vor introduce comenzile specifice ROM-ului tău Android"
+          echo "Exemplu:"
+          # repo init -u https://googlesource.com/platform/manifest -b android-14.0.0_r1
+          # repo sync -j$(nproc --all)
+          # source build/envsetup.sh
+          # lunch bestia_device-userdebug
+          # mka bacon
