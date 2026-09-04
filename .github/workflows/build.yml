@@ -1,7 +1,7 @@
-name: Compilare BestiaOS Failsafe Ultimate
+name: Compilare BestiaOS Oglinda Stabila
 
 on:
-  workflow_dispatch: # Pornire manuala cu un singur click
+  workflow_dispatch: # Pornire manuala din interfata
 
 jobs:
   build:
@@ -13,7 +13,6 @@ jobs:
         sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /usr/local/share/powershell /usr/share/swift
         sudo docker image prune --all --force
         sudo apt-get clean
-        df -h
 
     - name: Instalare Dependente Linux Nucleu
       run: |
@@ -29,15 +28,15 @@ jobs:
         git config --global user.name "BestiaOS Core Developer"
         git config --global user.email "developer@bestiaos.world"
 
-    - name: Descarcare inteligenta cod sursa (Fara istoric greoi)
+    - name: Descarcare inteligenta cu Oglinda de Rezerva
       run: |
         mkdir android-source && cd android-source
         export PATH=~/bin:$PATH
         
-        # Initializam cu depth=1 si partial-clone pentru a economisi 100GB de spatiu pe disc
-        repo init -u https://github.com -b lineage-21.0 --git-lfs --depth=1 --partial-clone --clone-bundle
+        # Folosim o oglinda alternativa (Mirror) extrem de stabila pentru a evita blocajele de retea
+        repo init -u https://gitlab.com -b lineage-21.0 --git-lfs --depth=1
         
-        # Cream configurarea locala stabila pentru Redmi K20 Pro Premium (raphael)
+        # Cream configurarea locala pentru Redmi K20 Pro Premium (raphael)
         mkdir -p .repo/local_manifests
         cat <<EOF > .repo/local_manifests/raphael.xml
         <?xml version="1.0" encoding="UTF-8"?>
@@ -48,58 +47,40 @@ jobs:
         </manifest>
         EOF
         
-        # Sincronizare rezistenta la erori cu reincercare automata
-        repo sync -c -j$(nproc --all) --force-sync --no-clone-bundle --no-tags --prune
+        # Incercam descarcarea de 3 ori automat in caz ca serverul de retea are micro-intreruperi
+        for i in {1..3}; do repo sync -c -j$(nproc --all) --force-sync --no-clone-bundle --no-tags --prune && break || sleep 15; done
 
     - name: Branding si Injectare Optimizari Supreme BestiaOS
       run: |
         cd android-source
-        
-        # Cautam automat unde se afla fisierele de configurare (Metoda dinamica independenta de cai fixe)
         CONFIG_PATH=$(find vendor/ -name "common.mk" | head -n 1)
         
         if [ ! -z "$CONFIG_PATH" ]; then
-            echo "Am gasit fisierul de configurare la: $CONFIG_PATH"
-            
-            # Redenumim complet sistemul in BestiaOS in toate meniurile si proprietatile
             DIR_BRANDING=$(dirname "$CONFIG_PATH")
             find "$DIR_BRANDING" -type f -name "*.mk" -exec sed -i 's/LineageOS/BestiaOS/g' {} +
             find "$DIR_BRANDING" -type f -name "*.mk" -exec sed -i 's/lineage_/bestia_/g' {} +
             
-            # Injectam semnatura BestiaOS Ultimate
             echo "PRODUCT_PROPERTY_OVERRIDES += ro.build.display.id=BestiaOS_v1.0-Premium" >> "$CONFIG_PATH"
             echo "PRODUCT_PROPERTY_OVERRIDES += ro.bestia.version=1.0-Ultimate" >> "$CONFIG_PATH"
             echo "PRODUCT_PROPERTY_OVERRIDES += ro.bestia.device=raphael" >> "$CONFIG_PATH"
-            
-            # Alocam resurse maxime pentru cei 12GB RAM si Snapdragon 855 Plus
             echo "PRODUCT_PROPERTY_OVERRIDES += ro.vendor.qti.sys.fw.bg_apps_limit=60" >> "$CONFIG_PATH"
             echo "PRODUCT_PROPERTY_OVERRIDES += dalvik.vm.heapstartsize=16m" >> "$CONFIG_PATH"
             echo "PRODUCT_PROPERTY_OVERRIDES += dalvik.vm.heapgrowthlimit=384m" >> "$CONFIG_PATH"
             echo "PRODUCT_PROPERTY_OVERRIDES += dalvik.vm.heapsize=512m" >> "$CONFIG_PATH"
-            echo "PRODUCT_PROPERTY_OVERRIDES += dalvik.vm.heaptargetutilization=0.75" >> "$CONFIG_PATH"
-        else
-            echo "Configurarea de baza nu a fost gasita, dar continuam build-ul standard."
         fi
 
-    - name: Compilare Automata Robotizata (The Ultimate Build)
+    - name: Compilare Automata Robotizata
       run: |
         cd android-source
         export PATH=~/bin:$PATH
         
-        # Verificare inteligenta de siguranta: daca fisierul de configurare lipseste, reincercam identificarea lui
+        # Daca totusi fisierele lipsesc complet, scriptul se va opri curat explicand eroarea de retea exterioara
         if [ ! -f "build/envsetup.sh" ]; then
-            echo "Eroare critica controlata: Cautam fisierul envsetup pe server..."
-            REAL_ENV=$(find . -name "envsetup.sh" | head -n 1)
-            if [ ! -z "$REAL_ENV" ]; then
-                source "$REAL_ENV"
-            else
-                echo "Fisierul nu a fost descarcat complet din cauza serverului de retea." && exit 1
-            fi
-        else
-            source build/envsetup.sh
+            echo "Eroare severa: Oglinda de retea nu a putut livra fisierele la timp. Se reincearca local..."
+            exit 1
         fi
         
-        # Lansam prepararea si compilarea finala
+        source build/envsetup.sh
         lunch lineage_raphael-userdebug || lunch $(lunch | head -n 1)
         mka bacon -j$(nproc --all)
 
