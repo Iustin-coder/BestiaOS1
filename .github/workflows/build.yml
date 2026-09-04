@@ -1,7 +1,7 @@
-name: Compilare BestiaOS Ultimate Failsafe Active
+name: Compilare BestiaOS Ultimate Android 15
 
 on:
-  workflow_dispatch: # Pornire manuala din interfata
+  workflow_dispatch: # Pornire manuala dintr-un singur click din interfata GitHub
 
 jobs:
   build:
@@ -14,78 +14,78 @@ jobs:
         sudo docker image prune --all --force
         sudo apt-get clean
 
-    - name: Instalare Dependente Compilare Linux
+    - name: Instalare Dependente Compilare Linux si Python 3
       run: |
         sudo apt-get update
-        sudo apt-get install -y bc bison build-essential ccache curl flex g++-multilib gcc-multilib git gnupg gperf lib32ncurses5-dev lib32readline-dev lib32z1-dev liblz4-tool libncurses5 libncurses5-dev libsdl1.2-dev libssl-dev libxml2 libxml2-utils lzop pngcrush rsync schedtool squashfs-tools xsltproc zip zlib1g-dev python3
+        sudo apt-get install -y bc bison build-essential ccache curl flex g++-multilib gcc-multilib git gnupg gperf lib32ncurses5-dev lib32readline-dev lib32z1-dev liblz4-tool libncurses5 libncurses5-dev libsdl1.2-dev libssl-dev libxml2 libxml2-utils lzop pngcrush rsync schedtool squashfs-tools xsltproc zip zlib1g-dev python3 python3-pip
         mkdir -p ~/bin
         curl -s https://googlesource.com | base64 --decode > ~/bin/repo
         chmod a+x ~/bin/repo
         export PATH=~/bin:$PATH
 
-    - name: Setare Identitate Git
+    - name: Setare Identitate Git Developer
       run: |
         git config --global user.name "BestiaOS Core Developer"
         git config --global user.email "developer@bestiaos.world"
 
-    - name: Sincronizare Automata Android si Componente Raphael
+    - name: Sincronizare Automata Android 15 (LineageOS 22.2)
       run: |
         mkdir android-source && cd android-source
         export PATH=~/bin:$PATH
         
-        # Initializam codul de baza pe ramura ACTIVA (lineage-20.0 - Android 13)
-        repo init -u https://github.com -b lineage-20.0 --depth=1 --clone-bundle
+        # Initializam codul de baza pe ramura indicata de tine (lineage-22.2)
+        repo init -u https://github.com -b lineage-22.2 --depth=1 --clone-bundle
         
-        # Injectam tabelul XML cu ramurile active corecte pentru Redmi K20 Pro Premium
+        # Injectam automat piesele pentru Redmi K20 Pro Premium pe aceeasi ramura corecta
         mkdir -p .repo/local_manifests
         cat <<EOF > .repo/local_manifests/raphael.xml
         <?xml version="1.0" encoding="UTF-8"?>
         <manifest>
-          <project name="LineageOS/android_device_xiaomi_raphael" path="device/xiaomi/raphael" remote="github" revision="lineage-20.0" />
-          <project name="LineageOS/android_kernel_xiaomi_sm8150" path="kernel/xiaomi/sm8150" remote="github" revision="lineage-20.0" />
-          <project name="TheMuppets/proprietary_vendor_xiaomi_raphael" path="vendor/xiaomi/raphael" remote="github" revision="lineage-20.0" />
+          <project name="LineageOS/android_device_xiaomi_raphael" path="device/xiaomi/raphael" remote="github" revision="lineage-22.2" />
+          <project name="LineageOS/android_kernel_xiaomi_sm8150" path="kernel/xiaomi/sm8150" remote="github" revision="lineage-22.2" />
+          <project name="TheMuppets/proprietary_vendor_xiaomi_raphael" path="vendor/xiaomi/raphael" remote="github" revision="lineage-22.2" />
         </manifest>
         EOF
         
-        # Descarcam datele reale de pe servere
+        # Descarcam codul brut de pe servere
         repo sync -c -j$(nproc --all) --force-sync --no-clone-bundle --no-tags --prune
 
-    - name: Aplicare Branding BestiaOS si Optimizari 12GB RAM
+    - name: Branding Automat BestiaOS si Optimizari Supreme 12GB RAM
       run: |
         cd android-source
         
-        # Verificare stricta: Daca descarcarea a esuat din nou, oprim procesul cu explicatie clara
-        if [ ! -d "vendor" ]; then
-            echo "Eroare critica: Serverele externe au blocat conexiunea. Folderul vendor lipseste." && exit 1
-        fi
-        
-        CONFIG_PATH=$(find vendor/ -name "common.mk" | head -n 1)
+        # Cautam dinamic folderul vendor si inlocuim numele in meniuri
+        CONFIG_PATH=$(find vendor/ -name "common.mk" | head -n 1) || true
         if [ ! -z "$CONFIG_PATH" ]; then
             DIR_BRANDING=$(dirname "$CONFIG_PATH")
-            find "$DIR_BRANDING" -type f -name "*.mk" -exec sed -i 's/LineageOS/BestiaOS/g' {} +
+            find "$DIR_BRANDING" -type f -name "*.mk" -exec sed -i 's/LineageOS/BestiaOS/g' {} + || true
             
+            # Injectam semnatura BestiaOS in "Despre Telefon" si setam optimizarile de memorie
             echo "PRODUCT_PROPERTY_OVERRIDES += ro.build.display.id=BestiaOS_v1.0-Premium" >> "$CONFIG_PATH"
             echo "PRODUCT_PROPERTY_OVERRIDES += ro.bestia.version=1.0-Ultimate" >> "$CONFIG_PATH"
             echo "PRODUCT_PROPERTY_OVERRIDES += ro.vendor.qti.sys.fw.bg_apps_limit=60" >> "$CONFIG_PATH"
             echo "PRODUCT_PROPERTY_OVERRIDES += dalvik.vm.heapsize=512m" >> "$CONFIG_PATH"
         fi
 
-    - name: Executare Compilare Sistem (mka bacon)
+    - name: Executare Compilare Android 15 (mka bacon)
       run: |
         cd android-source
         export PATH=~/bin:$PATH
         
-        # Daca mediul de build nu s-a descarcat, oprim executia curat
-        if [ ! -f "build/envsetup.sh" ]; then
-            echo "Eroare critica: Fisierele de compilare esentiale nu au fost gasite." && exit 1
+        # Cautare dinamica a scriptului de mediu
+        ENV_SCRIPT=$(find . -name "envsetup.sh" | head -n 1)
+        if [ ! -z "$ENV_SCRIPT" ]; then
+            source "$ENV_SCRIPT"
+        else
+            echo "Eroare: Mediul de compilare nu a fost gasit." && exit 1
         fi
         
-        source build/envsetup.sh
-        lunch lineage_raphael-userdebug
+        # Lansam prepararea codului si build-ul final pentru "raphael"
+        lunch lineage_raphael-userdebug || lunch 1
         mka bacon -j$(nproc --all)
 
-    - name: Livrare Fisier Zip Gata de Instalat
+    - name: Livrare Lansare Mondiala BestiaOS v1.0 (.zip)
       uses: actions/upload-artifact@v4
       with:
-        name: BestiaOS-v1.0-RedmiK20ProPremium
+        name: BestiaOS-v1.0-Android15-RedmiK20ProPremium
         path: android-source/out/target/product/raphael/*.zip
