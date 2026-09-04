@@ -28,15 +28,15 @@ jobs:
         git config --global user.name "BestiaOS Core Developer"
         git config --global user.email "developer@bestiaos.world"
 
-    - name: Descarca Codul Sursa si Sincronizeaza Componentele Raphael
+    - name: Descarca Codul Sursa si Aplica Modificarile BestiaOS
       run: |
         mkdir android-source && cd android-source
         export PATH=~/bin:$PATH
         
-        # 1. Initializam baza de date a sistemului de operare
+        # 1. Initializam baza Android 14
         repo init -u https://github.com -b lineage-21.0 --git-lfs --depth=1
         
-        # 2. Crearea unui Local Manifest (Metoda profesionala care repara eroarea de clone)
+        # 2. Crearea Local Manifest pentru Redmi K20 Pro Premium (raphael)
         mkdir -p .repo/local_manifests
         cat <<EOF > .repo/local_manifests/raphael.xml
         <?xml version="1.0" encoding="UTF-8"?>
@@ -47,31 +47,25 @@ jobs:
         </manifest>
         EOF
         
-        # 3. Sincronizam tot sistemul dintr-o singura comanda stabila
+        # 3. Sincronizam tot sistemul (Fortat, pentru a ne asigura ca se downloadeaza tot)
         repo sync -c -j$(nproc --all) --force-sync --no-clone-bundle --no-tags
-
-    - name: Branding Complet si Eliminare LineageOS
-      run: |
-        cd android-source/vendor/lineage
         
-        # Inlocuim numele in fisierele principale de configurare pentru meniuri
+        # 4. Branding Complet si Eliminare LineageOS (Acum ca folderul exista garantat)
+        cd vendor/lineage
         find . -type f -name "*.mk" -exec sed -i 's/LineageOS/BestiaOS/g' {} +
         find . -type f -name "*.mk" -exec sed -i 's/lineage_/bestia_/g' {} +
         find . -type f -name "*.mk" -exec sed -i 's/LINEAGE_/BESTIAOS_/g' {} +
         
-        # Injectam proprietatile BestiaOS direct in sistem
         echo "PRODUCT_PROPERTY_OVERRIDES += ro.build.display.id=BestiaOS_v1.0-Premium" >> config/common.mk
         echo "PRODUCT_PROPERTY_OVERRIDES += ro.bestia.version=1.0-Ultimate" >> config/common.mk
         echo "PRODUCT_PROPERTY_OVERRIDES += ro.bestia.device=raphael" >> config/common.mk
-
-    - name: Aplicare Optimizari Supreme de Performanta si RAM
-      run: |
-        cd android-source
+        
+        # 5. Aplicare Optimizari Supreme de Performanta si RAM pentru cei 12GB
+        cd ../..
         export USE_CCACHE=1
         export CCACHE_EXEC=/usr/bin/ccache
         ccache -M 50G
         
-        # Optimizari pentru Snapdragon 855 Plus si 12GB RAM
         echo "PRODUCT_PROPERTY_OVERRIDES += ro.vendor.qti.sys.fw.bg_apps_limit=60" >> vendor/lineage/config/common.mk
         echo "PRODUCT_PROPERTY_OVERRIDES += dalvik.vm.heapstartsize=16m" >> vendor/lineage/config/common.mk
         echo "PRODUCT_PROPERTY_OVERRIDES += dalvik.vm.heapgrowthlimit=384m" >> vendor/lineage/config/common.mk
