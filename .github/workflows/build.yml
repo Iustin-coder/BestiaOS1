@@ -1,0 +1,106 @@
+name: Compilare BestiaOS pentru Redmi K20 Pro Premium 
+
+on:
+workflow_dispatch: # Pornire manuală cu un singur click din interfața GitHub 
+
+jobs:
+build:
+runs-on: ubuntu-22.04 
+
+steps:
+
+* name: Curățare Server pentru Spațiu Maxim
+uses: jlumbroso/free-disk-space@main
+with:
+tool-cache: true
+android: false
+* name: Instalare Dependențe Linux Ultimate
+run: |
+sudo apt-get update
+sudo apt-get install -y bc bison build-essential ccache curl flex g++-multilib gcc-multilib git gnupg gperf lib32ncurses5-dev lib32readline-dev lib32z1-dev liblz4-tool libncurses5 libncurses5-dev libsdl1.2-dev libssl-dev libxml2 libxml2-utils lzop pngcrush rsync schedtool squashfs-tools xsltproc zip zlib1g-dev
+mkdir -p ~/bin
+curl [https://storage.googleapis.com/git-repo-downloads/repo](https://storage.googleapis.com/git-repo-downloads/repo) > ~/bin/repo
+chmod a+x ~/bin/repo
+export PATH=~/bin:$PATH
+* name: Configurare Identitate Git Developer
+run: |
+git config --global user.name "BestiaOS Core Developer"
+git config --global user.email "[developer@bestiaos.world](mailto:developer@bestiaos.world)"
+* name: Descarcă Codul Sursă și Integrează Componentele Raphael
+run: |
+mkdir android-source && cd android-source
+export PATH=~/bin:$PATH
+
+### 1. Inițializăm baza curată Android 14
+
+repo init -u https://github.com/LineageOS/android.git -b lineage-21.0 --git-lfs --depth=1 
+
+### 2. Descărcăm automat toate driverele oficiale și configurațiile specifice pentru Redmi K20 Pro / Premium (raphael)
+
+git clone https://github.com/LineageOS/android_device_xiaomi_raphael.git -b lineage-21.0 device/xiaomi/raphael
+git clone https://github.com/LineageOS/android_kernel_xiaomi_sm8150.git -b lineage-21.0 kernel/xiaomi/sm8150
+git clone https://github.com/TheMuppets/proprietary_vendor_xiaomi_raphael.git -b lineage-21.0 vendor/xiaomi/raphael 
+
+# 3. Sincronizăm restul elementelor de sistem la viteză maximă
+
+repo sync -c -j$(nproc --all) --force-sync --no-clone-bundle --no-tags
+
+* name: Branding Complet și Eliminare LineageOS (BestiaOS Transmutation)
+run: |
+cd android-source/vendor/lineage
+
+### Înlocuim numele în fișierele principale de configurare pentru meniuri
+
+find . -type f -name "*.mk" -exec sed -i 's/LineageOS/BestiaOS/g' {} +
+find . -type f -name "*.mk" -exec sed -i 's/lineage_/bestia_/g' {} +
+find . -type f -name "*.mk" -exec sed -i 's/LINEAGE_/BESTIAOS_/g' {} + 
+
+# Injectăm proprietățile BestiaOS direct în sistemul de operare pentru meniurile moderne
+
+echo "PRODUCT_PROPERTY_OVERRIDES += ro.build.display.id=BestiaOS_v1.0-Premium" >> config/common.mk
+echo "PRODUCT_PROPERTY_OVERRIDES += ro.bestia.version=1.0-Ultimate" >> config/common.mk
+echo "PRODUCT_PROPERTY_OVERRIDES += ro.bestia.device=raphael" >> config/common.mk
+
+echo "Branding-ul BestiaOS a fost aplicat cu succes în toate meniurile!"
+
+* name: Aplicare Optimizări Supreme de Performanță și RAM
+run: |
+cd android-source
+
+### Activăm cache-ul de compilare pentru eficiență sporită
+
+export USE_CCACHE=1
+export CCACHE_EXEC=/usr/bin/ccache
+ccache -M 50G 
+
+# Injectăm optimizări pentru procesorul Snapdragon 855 Plus și memoria masivă de 12GB RAM
+
+echo "PRODUCT_PROPERTY_OVERRIDES += ro.vendor.qti.sys.fw.bg_apps_limit=60" >> vendor/lineage/config/common.mk
+echo "PRODUCT_PROPERTY_OVERRIDES += dalvik.vm.heapstartsize=16m" >> vendor/lineage/config/common.mk
+echo "PRODUCT_PROPERTY_OVERRIDES += dalvik.vm.heapgrowthlimit=384m" >> vendor/lineage/config/common.mk
+echo "PRODUCT_PROPERTY_OVERRIDES += dalvik.vm.heapsize=512m" >> vendor/lineage/config/common.mk
+echo "PRODUCT_PROPERTY_OVERRIDES += dalvik.vm.heaptargetutilization=0.75" >> vendor/lineage/config/common.mk
+echo "PRODUCT_PROPERTY_OVERRIDES += dalvik.vm.heapminfree=4m" >> vendor/lineage/config/common.mk
+echo "PRODUCT_PROPERTY_OVERRIDES += dalvik.vm.heapmaxfree=16m" >> vendor/lineage/config/common.mk
+
+echo "Optimizările de viteză brută au fost injectate în nucleu!"
+
+* name: Pornire Compilare Monstru (The Ultimate Build)
+run: |
+cd android-source
+export PATH=~/bin:$PATH
+source build/envsetup.sh
+
+### Rulăm configurarea adaptată pentru telefonul tău
+
+lunch lineage_raphael-userdebug 
+
+# Asamblăm sistemul de operare complet într-un singur fișier zip instalabil
+
+mka bacon -j$(nproc --all)
+
+* name: Livrare Lansare Mondială BestiaOS v1.0 (.zip)
+uses: actions/upload-artifact@v4
+with:
+name: BestiaOS-v1.0-RedmiK20ProPremium-Official
+path: android-source/out/target/product/raphael/*.zip
