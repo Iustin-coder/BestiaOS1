@@ -1,128 +1,44 @@
-name: Build BestiaOS (Strict & Maximized)
+name: Build bestiaOS
 
 on:
+  workflow_dispatch: # Permite rularea manuală din tab-ul Actions pe GitHub
   push:
-    branches: [ "main" ]
-  workflow_dispatch:
+    branches: [ main, master ]
 
 jobs:
-  validate-and-build:
+  build:
     runs-on: ubuntu-22.04
     
     steps:
-    # 1. Descarcă structura repository-ului tău
-    - name: Checkout Repository
+    - name: Checkout repository
       uses: actions/checkout@v4
 
-    # 2. VALIDARE ULTRA-STRICTĂ (Reparată complet)
-    - name: Strict File Link Verification
-      run: |
-        echo "=== Începere Validare Linkuri de Descărcare ==="
-        
-        # AICI pui linkurile tale directe către fișiere brute!
-        # Am pus două exemple REALE de fișiere care funcționează perfect acum.
-        LINKS=(
-          "https://googleapis.com"
-          "https://googlesource.com"
-        )
-        
-        FAILED=0
-        for link in "${LINKS[@]}"; do
-          echo "--------------------------------------------------"
-          echo "Se verifică descărcarea directă pentru: $link"
-          
-          # Preluăm header-ul HTTP complet (urmărim redirectările cu -L)
-          HEADERS=$(curl -sI -L --connect-timeout 15 "$link")
-          
-          # Extragem codul Status și tipul de conținut (Content-Type)
-          STATUS=$(echo "$HEADERS" | grep -i "HTTP/" | tail -n 1 | awk '{print $2}')
-          CONTENT_TYPE=$(echo "$HEADERS" | grep -i "content-type:" | tail -n 1 | awk '{print $2}' | tr -d '\r\n')
-          
-          echo "Status HTTP detectat: $STATUS"
-          echo "Tip Conținut detectat: $CONTENT_TYPE"
-          
-          # Regula de aur: Dacă nu e status 200 SAU dacă conținutul este o pagină web (html), dăm eroare!
-          if [ "$STATUS" -ne 200 ] || [[ "$CONTENT_TYPE" == *"text/html"* ]]; then
-            echo ""
-            echo "❌ EROARE CRITICĂ: Linkul NU descarcă un fișier direct sau este invalid!"
-            echo "URL Problematic: $link"
-            echo "--- DETALII AVANSATE ---"
-            echo "Acest link returnează codul $STATUS și tipul $CONTENT_TYPE. În loc să descarce un fișier direct, te trimite către o pagină web vizuală sau dă eroare."
-            echo "--- DETALII SUPER AVANSATE (DEPANARE) ---"
-            echo "1. Dacă fișierul este pe GitHub, folosește linkul care începe cu 'https://githubusercontent.com...'"
-            echo "2. Dacă este un script dintr-un repository, asigură-te că linkul duce la fișierul brut (clic pe 'Raw' în GitHub)."
-            echo "3. Asigură-te că linkul nu are caractere speciale rătăcite la final."
-            echo "--------------------------------------------------"
-            FAILED=1
-          else
-            echo "✅ VALID: Linkul descarcă un fișier direct!"
-          fi
-        done
-        
-        if [ $FAILED -ne 0 ]; then
-          echo ""
-          echo "Validarea a eșuat. Procesul se oprește aici pentru a preveni un build greșit."
-          exit 1
-        fi
-
-    # 3. CURĂȚARE AGRESIVĂ (Metoda Comunității Android - Eliberare peste 40 GB)
-    - name: Aggressive Space Optimizer (Community Tools)
-      run: |
-        echo "=== Spațiu inițial pe disc ==="
-        df -h /
-        
-        echo "Eliminare pachete grele preinstalate..."
-        sudo apt-get remove -y '^dotnet-.*' '^llvm-.*' 'php.*' 'google-chrome-stable' 'microsoft-edge-stable' azure-cli google-cloud-cli mono-devel powershell firefox targetcli-fb dbus-user-session
-        
-        echo "Curățare directoare masive și imagini Docker latente..."
-        sudo rm -rf /usr/share/dotnet
-        sudo rm -rf /usr/local/lib/android
-        sudo rm -rf /opt/ghc
-        sudo rm -rf /usr/local/share/boost
-        sudo rm -rf /usr/local/share/chromium
-        sudo rm -rf "$AGENT_TOOLSDIRECTORY"
-        sudo docker image prune --all --force
-        
-        echo "Curățare cache sistem..."
-        sudo apt-get autoremove -y >/dev/null
-        sudo apt-get autoclean -y >/dev/null
-        
-        echo "=== Spațiu final obținut pentru Compilare ==="
-        df -h /
-
-    # 4. Instalarea dependințelor de compilare
-    - name: Install Android Build Toolkit
-      run: |
-        sudo apt-get update
-        sudo apt-get install -y bc bison build-essential ccache flex g++-multilib gcc-multilib git gnupg gperf lib32readline-dev lib32z1-dev liblz4-tool libncurses5-dev libsdl1.2-dev libssl-dev libxml2 libxml2-utils lzop pngcrush rsync schedtool squashfs-tools xsltproc zip zlib1g-dev
-        mkdir -p ~/bin
-        curl -s https://googleapis.com > ~/bin/repo
-        chmod a+x ~/bin/repo
-        sudo ln -sf ~/bin/repo /usr/bin/repo
-
-    # 5. Descărcarea surselor BestiaOS
-    - name: Repo Init and Sync
-      run: |
-        git config --global user.name "BestiaOS Builder"
-        git config --global user.email "builder@bestiaos.local"
-        
-        # Schimbă URL-ul de mai jos cu cel către repoul tău manifest real
-        repo init -u https://googlesource.com -b android-13.0.0_r1
-        
-        # Sincronizare rapidă cu limitare de istoric pentru economisire spațiu
-        repo sync -c -j$(nproc) --no-tags --no-clone-bundle --depth=1
-
-    # 6. Pornirea Compilării BestiaOS
-    - name: Execute Android Compilation
-      run: |
-        source build/envsetup.sh
-        lunch aosp_arm64-userdebug
-        make -j$(nproc)
-
-    # 7. Salvarea fișierelor rezultate ca Artefact
-    - name: Upload Output Artifact
-      uses: actions/upload-artifact@v4
+    - name: Eliberare spațiu pe disc (Crucial pentru Android)
+      uses: jlumbroso/free-disk-space@main
       with:
-        name: BestiaOS-ROM-Package
-        path: out/target/product/*/*.zip
-        if-no-files-found: warn
+        tool-cache: true
+        android: false
+        dotnet: true
+        haskell: true
+        large-packages: true
+        docker-images: true
+        swap-storage: false
+
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.10'
+
+    - name: Instalare dependențe Python
+      run: |
+        python -m pip install --upgrade pip
+        pip install requests
+
+    - name: Rulează scriptul de verificare și curățare bestiaOS
+      run: python bestia_check.py
+
+    - name: Inițializare și compilare (Placeholder)
+      run: |
+        echo "Spațiul liber pe disc:"
+        df -h
+        echo "Aici adaugi comenzile de repo init, sync superficial și build pentru bestiaOS."
