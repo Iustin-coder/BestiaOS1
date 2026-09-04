@@ -1,7 +1,7 @@
 name: Build Rapid BestiaOS GSI (Android 15)
 
 on:
-  workflow_dispatch: # Îți permite să pornești compilarea manual din tab-ul Actions
+  workflow_dispatch: # Permite pornirea manuală din tab-ul Actions
 
 jobs:
   build:
@@ -18,32 +18,31 @@ jobs:
 
     - name: Descărcare Unelte Modificare GSI (Erfan Tools)
       run: |
-        git clone --depth=1 https://github.com ~/ErfanGSIs
-        cd ~/ErfanGSIs
-        # Instalează cerințele de sistem pentru tool
+        # Am securizat comanda de clonare într-un folder curat
+        git clone --depth=1 "https://github.com" /home/runner/ErfanGSIs
+        cd /home/runner/ErfanGSIs
         sudo bash setup.sh
 
-    - name: Descărcare Bază Android 15 Oficială (Google AOSP)
+    - name: Descărcare Bază Android 15 Oficială (AOSP Treble)
       run: |
-        mkdir -p ~/input
-        cd ~/input
-        # Descarcă imaginea de bază oficială de Android 15 oferită de Google pentru telefoane Pixel/Treble
-        wget -O android15_base.zip https://google.com
+        mkdir -p /home/runner/input
+        cd /home/runner/input
+        # Descarcă imaginea de bază oficială de Android 15 pur, compatibilă Project Treble
+        wget -O android15_base.zip "https://google.com"
 
     - name: Generare și Optimizare BestiaOS pentru Redmi K20 Pro
       run: |
-        cd ~/ErfanGSIs
-        # Tool-ul preia imaginea oficială și o transformă într-un format compatibil cu telefoanele Project Treble (cum e Redmi K20 Pro)
-        # „AB” este formatul de partiție pentru sistemele noi de Android
-        ./url2gsi.sh ~/input/android15_base.zip AB
+        cd /home/runner/ErfanGSIs
+        # Transformă imaginea brută Google într-un ROM flash-uibil (Format AB universal)
+        sudo ./url2gsi.sh "/home/runner/input/android15_base.zip" AOSP AB
 
     - name: Pregătire Fișier ZIP Final
       run: |
-        mkdir -p ~/output
-        cd ~/ErfanGSIs/output/
-        # Redenumim fișierul final în BestiaOS
+        mkdir -p /home/runner/output
+        cd /home/runner/ErfanGSIs/output/
+        # Redenumim sistemul în BestiaOS
         mv *.img BestiaOS-Android15-RedmiK20Pro.img
-        zip -r ~/output/BestiaOS-Android15-RedmiK20Pro.zip BestiaOS-Android15-RedmiK20Pro.img
+        zip -r /home/runner/output/BestiaOS-Android15-RedmiK20Pro.zip BestiaOS-Android15-RedmiK20Pro.img
 
     - name: Încărcare Produs Final (ROM .zip)
       uses: actions/upload-artifact@v4
