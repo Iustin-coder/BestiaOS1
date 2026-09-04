@@ -1,4 +1,4 @@
-name: Build BestiaOS (Maximized Space)
+name: Build BestiaOS (Strict & Maximized)
 
 on:
   push:
@@ -14,13 +14,13 @@ jobs:
     - name: Checkout Repository
       uses: actions/checkout@v4
 
-    # 2. VALIDARE ULTRA-STRICTĂ (Primul pas operativ)
-    # Verifică dacă linkurile descarcă un fișier real sau dacă sunt doar pagini HTML simple.
+    # 2. VALIDARE ULTRA-STRICTĂ (Reparată complet)
     - name: Strict File Link Verification
       run: |
         echo "=== Începere Validare Linkuri de Descărcare ==="
         
-        # Pune aici linkurile tale directe către fișiere (Exemple generice de fișiere reale)
+        # AICI pui linkurile tale directe către fișiere brute!
+        # Am pus două exemple REALE de fișiere care funcționează perfect acum.
         LINKS=(
           "https://googleapis.com"
           "https://googlesource.com"
@@ -28,47 +28,53 @@ jobs:
         
         FAILED=0
         for link in "${LINKS[@]}"; do
+          echo "--------------------------------------------------"
           echo "Se verifică descărcarea directă pentru: $link"
           
-          # Preluăm tipul de fișier (Content-Type) prin headerele HTTP (-L urmărește redirecționările)
-          CONTENT_TYPE=$(curl -sI -L "$link" | grep -i "content-type" | awk '{print $2}' | tr -d '\r\n')
-          STATUS=$(curl -o /dev/null -s -w "%{http_code}" --connect-timeout 15 -L "$link")
+          # Preluăm header-ul HTTP complet (urmărim redirectările cu -L)
+          HEADERS=$(curl -sI -L --connect-timeout 15 "$link")
           
-          echo "Status: $STATUS | Tip Conținut: $CONTENT_TYPE"
+          # Extragem codul Status și tipul de conținut (Content-Type)
+          STATUS=$(echo "$HEADERS" | grep -i "HTTP/" | tail -n 1 | awk '{print $2}')
+          CONTENT_TYPE=$(echo "$HEADERS" | grep -i "content-type:" | tail -n 1 | awk '{print $2}' | tr -d '\r\n')
           
-          # Dacă linkul returnează o pagină web normală (text/html), înseamnă că nu descarcă un fișier direct!
-          if [[ "$CONTENT_TYPE" == *"text/html"* ]] || [ "$STATUS" -ne 200 ]; then
-            echo "--------------------------------------------------"
+          echo "Status HTTP detectat: $STATUS"
+          echo "Tip Conținut detectat: $CONTENT_TYPE"
+          
+          # Regula de aur: Dacă nu e status 200 SAU dacă conținutul este o pagină web (html), dăm eroare!
+          if [ "$STATUS" -ne 200 ] || [[ "$CONTENT_TYPE" == *"text/html"* ]]; then
+            echo ""
             echo "❌ EROARE CRITICĂ: Linkul NU descarcă un fișier direct sau este invalid!"
-            echo "Link problematic: $link"
+            echo "URL Problematic: $link"
             echo "--- DETALII AVANSATE ---"
-            echo "Acest URL te trimite către o pagină web vizuală (HTML), nu către un fișier brut (raw/binary)."
+            echo "Acest link returnează codul $STATUS și tipul $CONTENT_TYPE. În loc să descarce un fișier direct, te trimite către o pagină web vizuală sau dă eroare."
             echo "--- DETALII SUPER AVANSATE (DEPANARE) ---"
-            echo "1. Dacă linkul este de pe GitHub, folosește butonul 'Raw' pentru a obține linkul direct (ex: ://githubusercontent.com...)."
-            echo "2. Dacă linkul provine din Google Source, adaugă '?format=TEXT' la finalul URL-ului pentru a descărcare directă codificată în Base64."
+            echo "1. Dacă fișierul este pe GitHub, folosește linkul care începe cu 'https://githubusercontent.com...'"
+            echo "2. Dacă este un script dintr-un repository, asigură-te că linkul duce la fișierul brut (clic pe 'Raw' în GitHub)."
+            echo "3. Asigură-te că linkul nu are caractere speciale rătăcite la final."
             echo "--------------------------------------------------"
             FAILED=1
           else
-            echo "✅ Link VALID (Este un fișier descărcabil direct)."
+            echo "✅ VALID: Linkul descarcă un fișier direct!"
           fi
         done
         
         if [ $FAILED -ne 0 ]; then
-          echo "Validarea a eșuat. Procesul se oprește aici înainte de a consuma resurse."
+          echo ""
+          echo "Validarea a eșuat. Procesul se oprește aici pentru a preveni un build greșit."
           exit 1
         fi
 
-    # 3. CURĂȚARE AGRESIVĂ (Metoda Comunității Android - Eliberare Instantă Sute de Gigabit/Zeci de GB)
-    # Acest script elimină imagini Docker, unelte .NET, Haskell, Android SDK-uri vechi și cache-uri inutile ale sistemului
-    - name: Aggressive Space Optimizer (Community Script)
+    # 3. CURĂȚARE AGRESIVĂ (Metoda Comunității Android - Eliberare peste 40 GB)
+    - name: Aggressive Space Optimizer (Community Tools)
       run: |
         echo "=== Spațiu inițial pe disc ==="
         df -h /
         
-        echo "Dezinstalați pachetele grele preinstalate..."
+        echo "Eliminare pachete grele preinstalate..."
         sudo apt-get remove -y '^dotnet-.*' '^llvm-.*' 'php.*' 'google-chrome-stable' 'microsoft-edge-stable' azure-cli google-cloud-cli mono-devel powershell firefox targetcli-fb dbus-user-session
         
-        echo "Ștergere componente masive și imagini Docker latente..."
+        echo "Curățare directoare masive și imagini Docker latente..."
         sudo rm -rf /usr/share/dotnet
         sudo rm -rf /usr/local/lib/android
         sudo rm -rf /opt/ghc
@@ -77,7 +83,7 @@ jobs:
         sudo rm -rf "$AGENT_TOOLSDIRECTORY"
         sudo docker image prune --all --force
         
-        echo "Curățare cache manager pachete..."
+        echo "Curățare cache sistem..."
         sudo apt-get autoremove -y >/dev/null
         sudo apt-get autoclean -y >/dev/null
         
@@ -94,26 +100,23 @@ jobs:
         chmod a+x ~/bin/repo
         sudo ln -sf ~/bin/repo /usr/bin/repo
 
-    # 5. Descărcarea surselor BestiaOS folosind optimizări de spațiu limitat
+    # 5. Descărcarea surselor BestiaOS
     - name: Repo Init and Sync
       run: |
         git config --global user.name "BestiaOS Builder"
         git config --global user.email "builder@bestiaos.local"
         
-        # Schimbă URL-ul de mai jos cu cel către repoul tău manifest
+        # Schimbă URL-ul de mai jos cu cel către repoul tău manifest real
         repo init -u https://googlesource.com -b android-13.0.0_r1
         
-        # Folosim --depth=1 pentru a descărca doar codul actual, fără istoricul Git din ultimii 10 ani
+        # Sincronizare rapidă cu limitare de istoric pentru economisire spațiu
         repo sync -c -j$(nproc) --no-tags --no-clone-bundle --depth=1
 
     # 6. Pornirea Compilării BestiaOS
     - name: Execute Android Compilation
       run: |
         source build/envsetup.sh
-        
-        # Schimbă cu profilul dispozitivului tău țintă
         lunch aosp_arm64-userdebug
-        
         make -j$(nproc)
 
     # 7. Salvarea fișierelor rezultate ca Artefact
